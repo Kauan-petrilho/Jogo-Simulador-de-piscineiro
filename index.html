@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de Piscineiro 3D</title>
+<script>addEventListener('error',function(e){var d=document.getElementById('intro');if(d){d.style.display='flex';d.innerHTML='<h1>Erro no jogo</h1><p>'+e.message+'</p>'}});</script>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0c2a33;font-family:Verdana,Geneva,sans-serif;color:#eafcff}
+canvas{display:block}
+#hud{position:fixed;top:0;left:0;right:0;display:flex;flex-wrap:wrap;gap:6px 20px;padding:10px 16px;background:rgba(8,36,44,.78);font-size:15px}
+#hud b{font-weight:bold}#money{color:#ffd166}#xp{color:#7ee0ff}
+#job{display:none;gap:20px}
+#keys{margin-left:auto;opacity:.7;font-size:13px}
+#cross{position:fixed;left:50%;top:50%;width:10px;height:10px;margin:-5px;border:2px solid #fff;border-radius:50%;opacity:.85;pointer-events:none}
+#hint{position:fixed;bottom:64px;width:100%;text-align:center;font-size:18px;font-weight:bold;text-shadow:0 2px 6px #000;pointer-events:none}
+#toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(8,36,44,.92);padding:10px 20px;border-radius:10px;font-size:16px;opacity:0;transition:opacity .25s;pointer-events:none}
+.ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(6,24,30,.86);text-align:center;padding:20px}
+.ov h1{margin:0 0 12px;font-size:32px}
+.ov p{max-width:560px;line-height:1.6;margin:6px 0}
+button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:8px 14px;background:#5ee6d3;color:#06303a;font-weight:bold}
+button:disabled{background:#2f5560;color:#7aa0a8;cursor:not-allowed}
+#tbar{display:none;position:fixed;left:50%;bottom:110px;width:320px;height:22px;margin-left:-160px;background:#10303a;border:2px solid #fff;border-radius:12px;overflow:hidden}
+#tzone{position:absolute;top:0;bottom:0;background:#4cd964}
+#tcur{position:absolute;top:0;bottom:0;width:6px;margin-left:-3px;background:#fff}
+.row{display:flex;justify-content:space-between;align-items:center;margin:10px 0;gap:12px;font-size:14px}.row input[type=range]{width:220px}#ctabs{display:flex;gap:8px}#ctabs button.on{background:#ffd166}
+#tree{display:none}
+#cols{display:flex;gap:10px;align-items:flex-start;margin:16px 0}
+.col{width:230px;display:flex;flex-direction:column;gap:10px}
+.col h3{margin:0 0 4px;font-size:15px;color:#7ee0ff}
+.arr{align-self:center;font-size:28px;opacity:.5}
+.card{background:#0f3a45;border:1px solid #1d6475;border-radius:10px;padding:12px;text-align:left}
+.card.lock{opacity:.45}
+.card p{margin:6px 0;font-size:13px}.card small{display:block;margin-bottom:6px;color:#ffd166}
+.card i{float:right;font-style:normal;color:#7ee0ff}
+#bal{font-size:17px}
+</style>
+</head>
+<body>
+<div id="hud">
+  <span id="money"></span><span id="xp"></span><span id="nec"></span><span id="dv"></span>
+  <span id="job"><span id="jl"></span><span id="ja"></span><span id="jt"></span></span>
+  
+</div>
+<div id="cross"></div><div id="hint"></div><div id="toast"></div>
+
+<div id="tbar"><div id="tzone"></div><div id="tcur"></div></div>
+<div id="menu" class="ov" style="display:none"><h1 id="mt"></h1><div id="mb"></div><button onclick="fecharMenu()" style="margin-top:14px">Fechar (E)</button></div>
+<div id="cfg" class="ov" style="display:none;z-index:40">
+  <h1>Configurações</h1>
+  <div id="ctabs"><button data-t="c">Controle</button><button data-t="a">Áudio</button><button data-t="v">Vídeo</button></div>
+  <div class="card" style="width:560px;margin-top:14px">
+    <div id="t-c">
+      <p><b>WASD / setas</b> · andar &nbsp; <b>Mouse</b> · olhar</p>
+      <p><b>Clique</b> · pegar folha &nbsp; <b>E</b> · interagir</p>
+      <p><b>C</b> · cloro (C de novo para parar o indicador) &nbsp; <b>X</b> · cancelar trabalho</p>
+      <p><b>F</b> · comer &nbsp; <b>V</b> · beber &nbsp; <b>I</b> · inventário &nbsp; <b>K</b> · habilidades</p>
+      <p><b>Esc</b> · configurações</p>
+      <div class="row"><span>Sensibilidade do mouse</span><input id="c-sens" type="range" min="0.3" max="2" step="0.05"></div>
+    </div>
+    <div id="t-a" style="display:none">
+      <div class="row"><span>Volume geral</span><input id="c-vol" type="range" min="0" max="1" step="0.05"></div>
+      <div class="row"><span>Som ambiente</span><input id="c-amb" type="range" min="0" max="1" step="0.05"></div>
+      <div class="row"><span>Efeitos</span><input id="c-sfx" type="range" min="0" max="1" step="0.05"></div>
+      <div class="row"><span>Mudo</span><input id="c-mudo" type="checkbox"></div>
+    </div>
+    <div id="t-v" style="display:none">
+      <div class="row"><span>Campo de visão</span><input id="c-fov" type="range" min="60" max="100" step="1"></div>
+      <div class="row"><span>Qualidade</span><select id="c-q"><option value="0.5">Baixa</option><option value="1">Média</option><option value="2">Alta</option></select></div>
+      <div class="row"><span>Tela cheia</span><button id="c-full">Alternar</button></div>
+    </div>
+  </div>
+  <button id="cont" style="margin-top:14px">Continuar (Esc)</button>
+</div>
+<div id="load" class="ov" style="display:none;z-index:50"><h1 id="lmsg"></h1><div style="width:320px;height:14px;border:2px solid #fff;border-radius:8px;overflow:hidden"><div id="lbar" style="height:100%;background:#5ee6d3;width:0"></div></div></div>
+<div id="intro" class="ov">
+  <h1>Simulador de Piscineiro</h1>
+  <p>Justin Laketimber foi traído, afundou em bebida e dívidas e hoje deve <b>R$ 50.000</b> a agiotas que ameaçam sua família. Sua saída: virar piscineiro, juntar clientes, pagar o que deve e reconstruir a vida.</p>
+  <p>Use o quadro de tarefas e a loja da sua casa, bata na porta da casa do cliente para ir ao quintal, durma na cama, coma e beba. Recolha folhas clicando e aplique cloro (C) parando o indicador na zona verde.</p>
+  <p>Esc abre as configurações (controles, áudio e vídeo).</p><button id="play">Clique para jogar</button>
+</div>
+
+<div id="tree" class="ov">
+  <h1>Árvore de habilidades</h1>
+  <div id="bal"></div>
+  <div id="cols"></div>
+  <button id="close">Fechar (K)</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+if (!window.THREE) { document.body.innerHTML = '<p style="padding:24px">Não foi possível carregar o three.js. Conecte-se à internet e recarregue.</p>'; throw 0; }
+const $ = id => document.getElementById(id);
+
+// ---------- dados e progresso ----------
+const NIVEIS = [
+  { nome: 'Fácil',   folhas: 8,  verde: 0,   pg: 150, cor: 0x4da8c4 },
+  { nome: 'Média',   folhas: 20, verde: 0.5, pg: 400, cor: 0xe0a030 },
+  { nome: 'Difícil', folhas: 40, verde: 1,   pg: 1200, cor: 0xc9482b },
+];
+const SK = [
+  { id: 'alc',  nome: 'Alcance da vara',     desc: '+1,2 m de alcance por nível. A vara fica maior.', max: 5, tier: 0, m: 80, x: 15 },
+  { id: 'vel',  nome: 'Passos rápidos',      desc: '+10% de velocidade por nível.', max: 3, tier: 0, m: 60, x: 10 },
+  { id: 'area', nome: 'Rede larga',          desc: 'Cada clique pega as folhas ao redor da mira.', max: 3, tier: 1, req: ['alc', 2], m: 150, x: 30 },
+  { id: 'cl',   nome: 'Cloro concentrado',   desc: 'Cada dose limpa mais e recarrega mais rápido.', max: 3, tier: 1, req: ['alc', 1], m: 120, x: 25 },
+  { id: 'pg',   nome: 'Clientes fiéis',      desc: '+15% de pagamento por nível.', max: 3, tier: 2, req: ['area', 1], m: 250, x: 50 },
+  { id: 'xpb',  nome: 'Aprendiz rápido',     desc: '+20% de XP por nível.', max: 3, tier: 2, req: ['cl', 1], m: 200, x: 40 },
+];
+const SKBY = Object.fromEntries(SK.map(s => [s.id, s]));
+let S = { money: 0, xp: 0, sk: {}, debt: 50000, paid: 0, paidWeek: 0, day: 1, fome: 100, sede: 100, ene: 100,
+  inv: { cloro: 5, comida: 1, agua: 2, peneira: 1 }, jobs: [0, 0, 0], perf: 0, done: {}, vistos: {}, cfg: { fov: 72, q: 2, sens: 1, vol: 0.7, amb: 0.5, sfx: 0.7, mudo: false } };
+try { Object.assign(S, JSON.parse(localStorage.getItem('piscineiro3d') || '{}')); } catch (e) {}
+const save = () => localStorage.setItem('piscineiro3d', JSON.stringify(S));
+const lv = id => S.sk[id] || 0;
+const reach = () => 3 + 1.2 * lv('alc') + [0, 1.5, 3][S.inv.peneira - 1];
+const speed = () => 4.5 * (1 + 0.1 * lv('vel')) * (S.fome <= 0 || S.sede <= 0 ? 0.6 : S.ene < 20 ? 0.8 : 1);
+const areaR = () => lv('area') ? 0.7 + 0.5 * lv('area') : 0;
+const doseVal = () => 0.34 + 0.15 * lv('cl');
+const doseCd = () => 1.4 - 0.3 * lv('cl');
+
+// ---------- cena ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9ad0ec);
+scene.fog = new THREE.Fog(0x9ad0ec, 40, 160);
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 300);
+camera.rotation.order = 'YXZ';
+scene.add(camera);
+scene.add(new THREE.HemisphereLight(0xe3f3ff, 0x6a8a5a, 0.95));
+const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(30, 50, 20); scene.add(sun);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const colliders = [];
+function box(w, h, d, x, y, z, color, col = true) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
+  m.position.set(x, y, z); scene.add(m);
+  if (col) colliders.push({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 });
+  return m;
+}
+function plane(w, d, y, color, z = 0, x = 0) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ color }));
+  m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); scene.add(m); return m;
+}
+function rotulo(texto, sub, cor) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 192;
+  const t = c.getContext('2d');
+  t.fillStyle = '#' + cor.toString(16).padStart(6, '0'); t.fillRect(0, 0, 512, 192);
+  t.strokeStyle = '#fff'; t.lineWidth = 8; t.strokeRect(8, 8, 496, 176);
+  t.fillStyle = '#fff'; t.textAlign = 'center';
+  t.font = 'bold 56px Verdana'; t.fillText(texto, 256, 90);
+  t.font = '40px Verdana'; t.fillText(sub, 256, 148);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.125), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+  return m;
+}
+
+// chão e rua
+plane(500, 500, 0, 0x6fa05a, 0, 0);
+plane(500, 8, 0.01, 0x474b54, 10, 0);
+
+// quarto (10 x 10, porta em z = 5)
+plane(10, 10, 0.03, 0xb98a5a, 0, 0);
+const teto = plane(10, 10, 3, 0xeeeeee, 0, 0); teto.rotation.x = Math.PI / 2;
+box(10.3, 3, 0.3, 0, 1.5, -5, 0xefe3c8);
+box(0.3, 3, 10, -5, 1.5, 0, 0xefe3c8);
+box(0.3, 3, 10, 5, 1.5, 0, 0xefe3c8);
+box(4.15, 3, 0.3, -2.925, 1.5, 5, 0xefe3c8);
+box(4.15, 3, 0.3, 2.925, 1.5, 5, 0xefe3c8);
+box(2, 0.6, 3, -3.6, 0.3, -3.2, 0xdad4c6);
+box(2, 0.25, 1.2, -3.6, 0.7, -4.1, 0x5b84b1, false);
+box(1.2, 2.2, 0.8, 3.8, 1.1, -4.4, 0x7a5638);
+const porta = box(2, 2.4, 0.15, 0, 1.2, 5.05, 0x2e7d4f, false);
+const portaCol = { x0: -1, x1: 1, z0: 4.9, z1: 5.2 };
+colliders.push(portaCol);
+let portaAberta = false, tim = null;
+const rotQ = rotulo('Quadro de tarefas', 'E: abrir', 0x7a5638); rotQ.position.set(-1.5, 1.8, -4.8); scene.add(rotQ);
+box(2, 1, 0.8, 1.8, 0.5, -4.2, 0x6b5a45);
+const rotL = rotulo('Loja de Equipamentos', 'E: comprar', 0x2e6f5e); rotL.position.set(1.8, 1.9, -4.8); scene.add(rotL);
+const poster = rotulo('Hannah Montana', 'Show hoje às 20h', 0xff69b4); poster.position.set(-4.8, 1.8, 1.5); poster.rotation.y = Math.PI / 2; scene.add(poster);
+// decoração do quarto
+plane(5, 3.4, 0.05, 0x3a6ea5, 0.5, 0.2); plane(4.2, 2.6, 0.06, 0xe8c76a, 0.5, 0.2);
+const lampada = new THREE.PointLight(0xfff1c9, 0.9, 14); lampada.position.set(0, 2.6, 0); scene.add(lampada);
+box(0.6, 0.15, 0.6, 0, 2.92, 0, 0xfff1c9, false);
+for (const wz of [-1, 2.5]) {
+  box(0.12, 1.7, 2.3, 4.84, 1.8, wz, 0xffffff, false); box(0.14, 1.4, 2, 4.82, 1.8, wz, 0xbfe6ff, false);
+  box(0.2, 1.8, 0.5, 4.78, 1.8, wz - 1.3, 0xb5373a, false); box(0.2, 1.8, 0.5, 4.78, 1.8, wz + 1.3, 0xb5373a, false);
+}
+box(1.4, 0.9, 0.06, -3.6, 1.9, -4.85, 0x5b3a22, false); box(1.2, 0.7, 0.07, -3.6, 1.9, -4.83, 0xf2c14e, false);
+box(0.6, 0.6, 0.6, 3.8, 0.3, 3.6, 0xb5651d); box(0.7, 0.9, 0.7, 3.8, 1.05, 3.6, 0x3f8f3a, false);
+box(0.2, 2.6, 0.4, -1.1, 1.3, 5.05, 0x5b3a22, false); box(0.2, 2.6, 0.4, 1.1, 1.3, 5.05, 0x5b3a22, false); box(2.4, 0.2, 0.4, 0, 2.5, 5.05, 0x5b3a22, false);
+
+function arvore(x, z) {
+  const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 3, 8), new THREE.MeshLambertMaterial({ color: 0x6b4a2b }));
+  tr.position.set(x, 1.5, z); scene.add(tr);
+  const fo = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 10), new THREE.MeshLambertMaterial({ color: 0x3f8f3a }));
+  fo.position.set(x, 4.2, z); scene.add(fo);
+  colliders.push({ x0: x - 0.4, x1: x + 0.4, z0: z - 0.4, z1: z + 0.4 });
+}
+function quintal(cx, cor) {
+  const Z = POOL_Z, mad = 0x8b6b4a;
+  plane(18, 14, 0.02, 0xcdbd9a, Z, cx);
+  box(28, 1.2, 0.2, cx, 0.6, Z - 12.2, mad);
+  box(0.2, 1.2, 25.4, cx - 14, 0.6, Z + 0.4, mad); box(0.2, 1.2, 25.4, cx + 14, 0.6, Z + 0.4, mad);
+  box(6, 1.2, 0.2, cx - 11, 0.6, Z + 13.1, mad); box(6, 1.2, 0.2, cx + 11, 0.6, Z + 13.1, mad);
+  box(16, 6, 4, cx, 3, Z + 15, cor);
+  box(1.8, 2.3, 0.1, cx, 1.15, Z + 12.95, 0x3b2a1e, false);
+  box(2, 1.2, 0.1, cx - 5, 2.8, Z + 12.95, 0xcfe8f0, false); box(2, 1.2, 0.1, cx + 5, 2.8, Z + 12.95, 0xcfe8f0, false);
+  arvore(cx - 11, Z - 8); arvore(cx + 11, Z - 6); arvore(cx - 11, Z + 8);
+  box(2.2, 0.35, 0.8, cx + 9, 0.2, Z + 2, 0xf2efe8, false); box(2.2, 0.35, 0.8, cx + 9, 0.2, Z + 4, 0xf2efe8, false);
+}
+for (let x = -90; x <= 90; x += 30) { arvore(x + 8, 18); arvore(x + 15, -14); }
+// casas e piscinas
+const POOL_Z = 130;
+const piscinas = NIVEIS.map((n, i) => {
+  const cx = (i - 1) * 32;
+  box(16, 6, 10, cx, 3, 46, n.cor);
+  box(17, 0.5, 11, cx, 6.25, 46, 0x5a3a2a, false);
+  box(13, 0.3, 9, cx, 0.15, POOL_Z, 0xf2efe8);
+  const agua = new THREE.Mesh(new THREE.BoxGeometry(12, 0.05, 8),
+    new THREE.MeshLambertMaterial({ color: 0x28aae6, transparent: true, opacity: 0.88 }));
+  agua.position.set(cx, 0.32, POOL_Z); scene.add(agua);
+  box(1.8, 2.4, 0.15, cx, 1.2, 40.9, 0x3b2a1e, false); quintal(cx, n.cor);
+  const r = rotulo('Casa ' + (i + 1) + ' · ' + n.nome, 'R$ ' + n.pg, n.cor);
+  r.position.set(cx, 4.4, 40.85); r.rotation.y = Math.PI; scene.add(r);
+  return { cx, agua, signX: cx, signZ: 40 };
+});
+
+// vara
+const matCinza = new THREE.MeshLambertMaterial({ color: 0xb9bec4 });
+const pole = new THREE.Group();
+const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 8), matCinza);
+rod.rotation.x = Math.PI / 2;
+const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.02, 8, 24), matCinza);
+ring.rotation.x = Math.PI / 2.3;
+pole.add(rod, ring);
+pole.position.set(0.35, -0.38, -0.3); pole.rotation.x = -0.12;
+camera.add(pole);
+function atualizarVara() {
+  const L = 1 + reach() * 0.3;
+  rod.scale.y = L; rod.position.z = -L / 2; ring.position.z = -L;
+}
+atualizarVara();
+
+// ---------- estado do jogo ----------
+const pos = new THREE.Vector3(-2, 1.65, -2);
+let yaw = 0, pitch = 0, locked = false, painel = false, swing = 0;
+let job = null, toastT = 0;
+const k = {};
+const R = 0.35;
+const ray = new THREE.Ray(), dir = new THREE.Vector3();
+const folhaGeo = new THREE.PlaneGeometry(0.9, 0.55);
+const folhaMats = [0x5a8f32, 0x96642a].map(c => new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }));
+
+const toast = (s, d = 3.2) => { const t = $('toast'); t.textContent = s; t.style.opacity = 1; toastT = d; };
+const corAgua = v => new THREE.Color(0x28aae6).lerp(new THREE.Color(0x466a28), v);
+const perto = (x, z, d) => Math.hypot(pos.x - x, pos.z - z) < d;
+function pertoPiscina(i) {
+  const dx = Math.max(Math.abs(pos.x - piscinas[i].cx) - 6.5, 0), dz = Math.max(Math.abs(pos.z - POOL_Z) - 4.5, 0);
+  return Math.hypot(dx, dz) <= 5;
+}
+function ganharXP(n) { S.xp += Math.round(n * (1 + 0.2 * lv('xpb'))); }
+
+function iniciar(i) {
+  const n = NIVEIS[i];
+  job = { i, n, t: 0, cd: 0, perf: 0, verde: n.verde, folhas: [] };
+  for (let f = 0; f < n.folhas; f++) {
+    const m = new THREE.Mesh(folhaGeo, folhaMats[Math.random() < 0.5 ? 0 : 1]);
+    const bx = piscinas[i].cx + (Math.random() - 0.5) * 10.4, bz = POOL_Z + (Math.random() - 0.5) * 6.4;
+    m.rotation.x = -Math.PI / 2; m.rotation.z = Math.random() * 6.28;
+    m.userData = { bx, bz, ph: Math.random() * 6.28 };
+    m.position.set(bx, 0.37, bz); scene.add(m); job.folhas.push(m);
+  }
+  piscinas[i].agua.material.color.copy(corAgua(job.verde));
+  toast(n.verde > 0 ? 'Recolha as folhas e aplique cloro (C).' : 'Recolha as folhas com a vara.');
+}
+function encerrar(cancelado) {
+  tim = null; $('tbar').style.display = 'none';
+  job.folhas.forEach(m => scene.remove(m));
+  piscinas[job.i].agua.material.color.set(0x28aae6);
+  job = null; if (cancelado) toast('Trabalho cancelado.');
+}
+function verificar() {
+  if (!job || job.folhas.length || job.verde > 0.001) return;
+  const bonus = Math.max(0, Math.round((100 - job.t) * 2));
+  const pay = Math.round(job.n.pg * (1 + 0.15 * lv('pg'))) + bonus + job.perf * 25;
+  const xp = Math.round(job.n.pg / 5 * (1 + 0.2 * lv('xpb')));
+  S.money += pay; S.xp += xp; S.jobs[job.i]++; checarMissoes();
+  toast('Piscina limpa! +R$ ' + pay + ' e +' + xp + ' XP');
+  encerrar(false);
+}
+function pegar() {
+  if (!job) return;
+  camera.getWorldDirection(dir); ray.set(camera.position, dir);
+  let best = null, bd = 1e9, longe = false;
+  for (const l of job.folhas) {
+    const d = ray.distanceSqToPoint(l.position);
+    if (d > 0.64) continue;
+    if (camera.position.distanceTo(l.position) > reach()) { longe = true; continue; }
+    if (d < bd) { bd = d; best = l; }
+  }
+  swing = 1;
+  if (!best) { if (longe) toast('Fora do alcance: chegue mais perto ou melhore a vara (K).'); return; }
+  const r = areaR(), pegas = job.folhas.filter(l => l === best || l.position.distanceTo(best.position) <= r);
+  pegas.forEach(l => scene.remove(l));
+  job.folhas = job.folhas.filter(l => !pegas.includes(l));
+  bip(660, 0.08); ganharXP(pegas.length); verificar();
+}
+function interagir() {
+  if (!portaAberta && perto(0, 5, 3.2)) {
+    portaAberta = true; colliders.splice(colliders.indexOf(portaCol), 1); return toast('Porta aberta.');
+  }
+  if (perto(-1.5, -4.8, 2.2)) return abrirMenu('tarefas');
+  if (perto(1.8, -4.2, 2.2)) return abrirMenu('loja');
+  if (perto(-3.6, -3.2, 2.2)) return dormir();
+  if (perto(-4.8, 1.5, 2.2)) return toast('Justin murmura: "Eu nunca disse que não era fã."');
+  const j = piscinas.findIndex(p => perto(p.cx, POOL_Z + 11.5, 3.5));
+  if (j >= 0) return job ? toast('Termine o trabalho (ou cancele com X) antes de sair.') : sairCasa(j);
+  if (job) return;
+  const i = piscinas.findIndex(p => perto(p.signX, p.signZ, 4));
+  if (i >= 0) { if (liberada(i)) entrarCasa(i); else toast('Bloqueada: faça 3 serviços na Casa ' + i + ' primeiro.'); }
+}
+function cloro() {
+  if (!job) return;
+  if (job.verde <= 0) return toast('A água já está limpa.');
+  if (!pertoPiscina(job.i)) return toast('Chegue perto da piscina para aplicar cloro.');
+  if (job.cd > 0) return;
+  if (tim) return pararTiming();
+  if (S.inv.cloro <= 0) return toast('Sem cloro! Compre na loja de casa.');
+  const z = 0.1 + 0.02 * lv('cl');
+  $('tzone').style.cssText = 'left:' + (50 - z * 100) + '%;width:' + (z * 200) + '%';
+  tim = { x: 0, d: 1 }; $('tbar').style.display = 'block';
+  toast('Pare o indicador na zona verde (C).');
+}
+function pararTiming() {
+  const d = Math.abs(tim.x - 0.5), zona = 0.1 + 0.02 * lv('cl');
+  let f = 0.35, msg = 'Errou o ponto…';
+  if (d <= zona) { f = 1.3; msg = 'PERFEITO!'; job.perf++; S.perf++; }
+  else if (d <= 0.28) { f = 0.7; msg = 'Quase!'; }
+  bip(f > 1 ? 880 : f > 0.5 ? 520 : 180, 0.25, f > 1 ? 'triangle' : 'sawtooth');
+  S.inv.cloro--; tim = null; $('tbar').style.display = 'none';
+  job.verde = Math.max(0, job.verde - doseVal() * f); job.cd = doseCd();
+  piscinas[job.i].agua.material.color.copy(corAgua(job.verde));
+  toast(msg + ' (cloro restante: ' + S.inv.cloro + ')');
+  checarMissoes(); verificar();
+}
+
+// ---------- história, missões, loja e finanças ----------
+let carregando = false;
+function carregar(msg, fn) {
+  carregando = true; $('lmsg').textContent = msg; $('lbar').style.width = '0%'; $('load').style.display = 'flex';
+  let pct = 0;
+  const iv = setInterval(() => {
+    pct += 7; $('lbar').style.width = Math.min(pct, 100) + '%';
+    if (pct >= 100) { clearInterval(iv); fn(); setTimeout(() => { $('load').style.display = 'none'; carregando = false; }, 300); }
+  }, 100);
+}
+function entrarCasa(i) {
+  carregar('Indo para o quintal da Casa ' + (i + 1) + '…', () => { pos.set(piscinas[i].cx, 1.65, POOL_Z + 10); yaw = 0; pitch = -0.15; iniciar(i); });
+}
+function sairCasa(i) {
+  carregar('Voltando para a rua…', () => { pos.set(piscinas[i].cx, 1.65, 37); yaw = Math.PI; pitch = 0; });
+}
+const fila = [];
+const historia = (...t) => t.forEach(x => fila.push(x));
+const liberada = i => i === 0 || S.jobs[i - 1] >= 3;
+if (!S.vistos.ini) {
+  S.vistos.ini = 1;
+  historia('Justin acorda com a cabeça pesada. A traição, o bar do Adevair e as dívidas viraram uma bola de neve.',
+    'Os agiotas cobram R$ 50.000 e citam a família dele. Hoje Justin decide: vai virar piscineiro.');
+}
+const MISS = [
+  { id: 'm1', t: 'Primeiro cliente: limpe a piscina da Casa 1', p: () => S.jobs[0] >= 1, r: [100, 50], h: 'Primeiro cliente satisfeito. Pela primeira vez em meses, Justin sente orgulho de si.' },
+  { id: 'm2', t: 'Pague R$ 500 da dívida', p: () => S.paid >= 500, r: [0, 60], h: 'O agiota aceitou o dinheiro, mas avisou: "Toda semana, Justin. Pense na sua família."' },
+  { id: 'm3', t: 'Fidelize a Casa 1 (3 serviços): libera a Casa 2', p: () => S.jobs[0] >= 3, r: [200, 80], h: 'O boca a boca funcionou: o bairro vizinho quer o piscineiro de confiança.' },
+  { id: 'm4', t: 'Fidelize a Casa 2 (3 serviços): libera a Casa 3', p: () => S.jobs[1] >= 3, r: [800, 200], h: 'A mansão no fim da rua chamou Justin. Cliente grande, exigência grande.' },
+  { id: 'm5', t: 'Reduza a dívida em R$ 25.000', p: () => S.paid >= 25000, r: [2000, 500], h: 'Metade do caminho. Justin já consegue olhar no espelho.' },
+  { id: 's1', t: 'Secundária: compre a Peneira Reforçada', p: () => S.inv.peneira >= 2, r: [0, 40] },
+  { id: 's2', t: 'Secundária: acerte 3 cloros perfeitos', p: () => S.perf >= 3, r: [100, 60] },
+];
+function checarMissoes() {
+  MISS.forEach(m => {
+    if (S.done[m.id] || !m.p()) return;
+    S.done[m.id] = 1; S.money += m.r[0]; ganharXP(m.r[1]); bip(784, 0.15); setTimeout(() => bip(1046, 0.25), 150);
+    toast('Missão concluída: ' + m.t.replace('Secundária: ', '') + ' (+R$ ' + m.r[0] + ', +' + m.r[1] + ' XP)', 4.5);
+    if (m.h) historia(m.h);
+  });
+  save();
+}
+function pagar(v) {
+  v = Math.min(v, S.debt, S.money);
+  if (v <= 0) return toast('Sem dinheiro suficiente.');
+  S.money -= v; S.debt -= v; S.paid += v; S.paidWeek += v;
+  if (S.debt <= 0) historia('DÍVIDA QUITADA! Justin reconstruiu a vida: a família está segura e o futuro é dele.');
+  checarMissoes(); renderMenu();
+}
+const LOJA = [
+  { id: 'cloro', n: 'Cloro (1 dose)', p: 15 },
+  { id: 'comida', n: 'Marmita', p: 25 },
+  { id: 'agua', n: 'Garrafa de água', p: 8 },
+  { id: 'peneira', n: 'Peneira Reforçada (+1,5 m)', p: 300, tier: 2 },
+  { id: 'peneira', n: 'Peneira Profissional (+3 m)', p: 900, tier: 3 },
+];
+function comprarItem(i) {
+  const it = LOJA[i];
+  if (S.money < it.p) return toast('Dinheiro insuficiente.');
+  if (it.tier) {
+    if (S.inv.peneira !== it.tier - 1) return toast('Compre a peneira anterior primeiro.');
+    S.inv.peneira = it.tier; atualizarVara();
+  } else S.inv[it.id]++;
+  S.money -= it.p; checarMissoes(); renderMenu();
+}
+function usar(tipo) {
+  if (S.inv[tipo] <= 0) return toast('Você não tem isso. Compre na loja.');
+  S.inv[tipo]--;
+  if (tipo === 'comida') { S.fome = Math.min(100, S.fome + 45); toast('Você comeu.'); }
+  else { S.sede = Math.min(100, S.sede + 50); toast('Você bebeu água.'); }
+  save();
+}
+function dormir() {
+  S.ene = 100; S.day++;
+  const pago = Math.min(S.money, 40); S.money -= pago; S.debt += 40 - pago;
+  let t = 'Dia ' + S.day + '. Contas de água e luz: R$ 40.';
+  if (S.day % 7 === 0) {
+    if (S.paidWeek < 1000) { S.debt = Math.round(S.debt * 1.05); t += ' Você não pagou o mínimo semanal: juros de 5% e um recado sinistro dos agiotas.'; }
+    else t += ' Os agiotas ficaram quietos esta semana.';
+    S.paidWeek = 0;
+  }
+  if (S.day === 3) historia('Adevair mandou mensagem: "Passa aqui, a conta do bar ainda está aberta." Justin ignora. Hoje não.');
+  toast(t, 5); save();
+}
+let menuAtual = '';
+function abrirMenu(tipo) {
+  menuAtual = tipo; painel = true; document.exitPointerLock(); if (livre) locked = false;
+  $('intro').style.display = 'none'; $('tree').style.display = 'none'; $('menu').style.display = 'flex'; renderMenu();
+}
+function fecharMenu() { painel = false; menuAtual = ''; $('menu').style.display = 'none'; travar(); }
+function renderMenu() {
+  const inv = `Cloro ${S.inv.cloro} · Marmita ${S.inv.comida} · Água ${S.inv.agua} · Peneira nível ${S.inv.peneira}`;
+  let h = `<div id="bal"><span style="color:#ffd166">R$ ${S.money}</span> · <span style="color:#7ee0ff">${S.xp} XP</span></div><div class="card" style="width:560px;margin-top:10px">`, t = '';
+  if (menuAtual === 'tarefas') {
+    t = 'Quadro de tarefas';
+    h += `<b>Dívida com os agiotas: R$ ${Math.round(S.debt)}</b><p>Dia ${S.day} · pago nesta semana: R$ ${S.paidWeek} (mínimo semanal R$ 1000; contas diárias R$ 40)</p>
+      <button onclick="pagar(500)">Pagar R$ 500</button> <button onclick="pagar(2000)">Pagar R$ 2000</button></div>
+      <div class="card" style="width:560px;margin-top:10px"><b>Missões</b>${MISS.map(m => `<p>${S.done[m.id] ? '✔' : '○'} ${m.t}</p>`).join('')}</div>
+      <div class="card" style="width:560px;margin-top:10px"><b>Trabalhos</b>${NIVEIS.map((n, i) => `<p>Casa ${i + 1} (${n.nome}): R$ ${n.pg} · ${liberada(i) ? 'disponível' : 'bloqueada'} · feitos: ${S.jobs[i]}</p>`).join('')}`;
+  } else if (menuAtual === 'loja') {
+    t = 'Loja de equipamentos';
+    h += `<small>Inventário: ${inv}</small>` + LOJA.map((it, i) => `<p>${it.n} · R$ ${it.p} ` + (it.tier && S.inv.peneira >= it.tier ? '(comprada)' : `<button onclick="comprarItem(${i})">Comprar</button>`) + '</p>').join('');
+  } else {
+    t = 'Inventário';
+    h += `<p>${inv}</p><p>F: comer · V: beber água<br>Fome ${Math.round(S.fome)} · Sede ${Math.round(S.sede)} · Energia ${Math.round(S.ene)}</p>`;
+  }
+  $('mt').textContent = t; $('mb').innerHTML = h + '</div>';
+}
+addEventListener('beforeunload', save);
+
+// ---------- árvore de habilidades ----------
+function card(s) {
+  const L = lv(s.id), max = L >= s.max, cm = s.m * (L + 1), cx = s.x * (L + 1);
+  const lock = s.req && lv(s.req[0]) < s.req[1];
+  const can = !max && !lock && S.money >= cm && S.xp >= cx;
+  return `<div class="card ${lock ? 'lock' : ''}"><b>${s.nome}</b><i>${L}/${s.max}</i><p>${s.desc}</p>` +
+    (s.req ? `<small>Requer ${SKBY[s.req[0]].nome} nível ${s.req[1]}</small>` : '') +
+    (max ? '<b>Nível máximo</b>' : `<button ${can ? '' : 'disabled'} onclick="comprar('${s.id}')">R$ ${cm} + ${cx} XP</button>`) + '</div>';
+}
+function desenharArvore() {
+  $('bal').innerHTML = `<span style="color:#ffd166">R$ ${S.money}</span> · <span style="color:#7ee0ff">${S.xp} XP</span>`;
+  $('cols').innerHTML = [0, 1, 2].map(t =>
+    `<div class="col"><h3>${['Base', 'Avançado', 'Mestre'][t]}</h3>${SK.filter(s => s.tier === t).map(card).join('')}</div>`
+  ).join('<div class="arr">→</div>');
+}
+function comprar(id) {
+  const s = SKBY[id], L = lv(id), cm = s.m * (L + 1), cx = s.x * (L + 1);
+  if (L >= s.max || (s.req && lv(s.req[0]) < s.req[1]) || S.money < cm || S.xp < cx) return;
+  S.money -= cm; S.xp -= cx; S.sk[id] = L + 1; save();
+  atualizarVara(); desenharArvore();
+}
+function alternarArvore() {
+  painel = !painel;
+  $('tree').style.display = painel ? 'flex' : 'none';
+  if (painel) { document.exitPointerLock(); if (livre) locked = false; desenharArvore(); $('intro').style.display = 'none'; }
+  else travar();
+}
+
+// ---------- configurações, áudio e vídeo ----------
+function limparTeclas() { for (const x in k) k[x] = false; }
+addEventListener('blur', limparTeclas);
+document.addEventListener('visibilitychange', limparTeclas);
+let AC = null, master = null, ambG = null;
+function iniciarAudio() {
+  if (AC) return;
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = AC.createGain(); master.connect(AC.destination);
+    const buf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+    const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420;
+    ambG = AC.createGain(); src.connect(f); f.connect(ambG); ambG.connect(master); src.start();
+    aplicarAudio();
+  } catch (e) { AC = null; }
+}
+function aplicarAudio() {
+  if (!AC) return;
+  master.gain.value = S.cfg.mudo ? 0 : S.cfg.vol;
+  ambG.gain.value = S.cfg.amb * 0.25;
+}
+function bip(freq, dur = 0.12, tipo = 'sine') {
+  if (!AC || S.cfg.mudo) return;
+  const o = AC.createOscillator(), g = AC.createGain(), t0 = AC.currentTime;
+  o.type = tipo; o.frequency.value = freq;
+  g.gain.setValueAtTime(Math.max(0.0001, S.cfg.sfx * 0.25), t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(master); o.start(); o.stop(t0 + dur);
+}
+function aplicarVideo() {
+  camera.fov = S.cfg.fov; camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(devicePixelRatio, S.cfg.q)); renderer.setSize(innerWidth, innerHeight);
+}
+function aba(t) {
+  ['c', 'a', 'v'].forEach(x => { $('t-' + x).style.display = x === t ? 'block' : 'none'; });
+  document.querySelectorAll('#ctabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+}
+function abrirConfig() {
+  if (carregando) return;
+  limparTeclas(); painel = true; document.exitPointerLock(); if (livre) locked = false;
+  $('intro').style.display = 'none'; $('tree').style.display = 'none'; $('menu').style.display = 'none'; $('cfg').style.display = 'flex';
+}
+function fecharConfig() { painel = false; $('cfg').style.display = 'none'; travar(); }
+(function () {
+  ['sens', 'vol', 'amb', 'sfx', 'fov', 'q'].forEach(key => {
+    const el = $('c-' + key); el.value = S.cfg[key];
+    el.oninput = () => { S.cfg[key] = +el.value; aplicarVideo(); aplicarAudio(); save(); };
+  });
+  $('c-mudo').checked = S.cfg.mudo;
+  $('c-mudo').onchange = e => { S.cfg.mudo = e.target.checked; aplicarAudio(); save(); };
+  document.querySelectorAll('#ctabs button').forEach(b => b.onclick = () => aba(b.dataset.t));
+  $('c-full').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  $('cont').onclick = fecharConfig;
+  aba('c'); aplicarVideo();
+})();
+
+// ---------- controles ----------
+let livre = false, arrasto = false, moveu = false, iniciado = false, provado = false;
+function entrarModoLivre() {
+  livre = true; locked = true; $('intro').style.display = 'none';
+  toast('Modo arrastar: segure o botão do mouse e arraste para olhar. Um clique rápido pega a folha.');
+}
+function travar() {
+  const primeira = !iniciado; iniciado = true; iniciarAudio();
+  $('intro').style.display = 'none';
+  if (livre) { locked = true; return; }
+  try {
+    const p = renderer.domElement.requestPointerLock();
+    if (p && p.catch) p.catch(() => provado ? abrirConfig() : entrarModoLivre());
+  } catch (e) { if (!provado) entrarModoLivre(); }
+  if (primeira) setTimeout(() => { if (!locked && !painel) entrarModoLivre(); }, 800);
+}
+$('play').onclick = travar;
+$('close').onclick = alternarArvore;
+document.addEventListener('pointerlockerror', () => { if (provado) { abrirConfig(); toast('Clique em Continuar.'); } else entrarModoLivre(); });
+document.addEventListener('pointerlockchange', () => {
+  if (livre) return;
+  locked = document.pointerLockElement === renderer.domElement;
+  if (locked) { provado = true; limparTeclas(); }
+  else if (iniciado && !painel && !carregando) abrirConfig();
+  $('intro').style.display = (iniciado || locked || painel) ? 'none' : 'flex';
+});
+addEventListener('mousemove', e => {
+  if (!locked || (livre && !arrasto)) return;
+  if (livre) moveu = true;
+  yaw -= e.movementX * 0.0022 * S.cfg.sens;
+  pitch = Math.max(-1.45, Math.min(1.45, pitch - e.movementY * 0.0022 * S.cfg.sens));
+});
+addEventListener('mousedown', () => {
+  if (!locked || carregando) return;
+  if (livre) { arrasto = true; moveu = false; } else pegar();
+});
+addEventListener('mouseup', () => {
+  if (livre && arrasto) { arrasto = false; if (!moveu) pegar(); }
+});
+addEventListener('keydown', e => {
+  const c = e.key.toLowerCase();
+  if (e.repeat) return;
+  k[c] = true;
+  if (carregando) return;
+  if (c === 'escape') {
+    if ($('cfg').style.display === 'flex') fecharConfig();
+    else if ($('menu').style.display === 'flex') fecharMenu();
+    else if ($('tree').style.display === 'flex') alternarArvore();
+    else if (livre && locked) abrirConfig();
+    return;
+  }
+  if ($('cfg').style.display === 'flex') return;
+  if ($('menu').style.display === 'flex') { if (['k', 'e', 'i'].includes(c)) fecharMenu(); return; }
+  if (c === 'k') return alternarArvore();
+  if (!locked) return;
+  if (c === 'f') return usar('comida');
+  if (c === 'v') return usar('agua');
+  if (c === 'i') return abrirMenu('inv');
+  if (c === 'e') interagir();
+  else if (c === 'c') cloro();
+  else if (c === 'x' && job) encerrar(true);
+});
+addEventListener('keyup', e => k[e.key.toLowerCase()] = false);
+
+function mover(dt) {
+  let f = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0);
+  let r = (k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0);
+  if (!f && !r) return;
+  const l = Math.hypot(f, r); f /= l; r /= l;
+  const sp = speed() * dt;
+  const dx = (-Math.sin(yaw) * f + Math.cos(yaw) * r) * sp;
+  const dz = (-Math.cos(yaw) * f - Math.sin(yaw) * r) * sp;
+  const bate = (x, z) => colliders.some(c => x + R > c.x0 && x - R < c.x1 && z + R > c.z0 && z - R < c.z1);
+  if (!bate(pos.x + dx, pos.z)) pos.x += dx;
+  if (!bate(pos.x, pos.z + dz)) pos.z += dz;
+}
+
+function dica() {
+  let h = '';
+  if (!portaAberta && perto(0, 5, 3.2)) h = 'E: abrir a porta';
+  else if (!job) { const i = piscinas.findIndex(p => perto(p.signX, p.signZ, 4)); if (i >= 0) h = `E: bater na porta · Casa ${i + 1} (${NIVEIS[i].nome})`; }
+  else if (job.verde > 0 && pertoPiscina(job.i)) h = 'C: aplicar cloro';
+  if (!h) {
+    if (perto(-1.5, -4.8, 2.2)) h = 'E: quadro de tarefas';
+    else if (perto(1.8, -4.2, 2.2)) h = 'E: loja de equipamentos';
+    else if (perto(-3.6, -3.2, 2.2)) h = 'E: dormir (próximo dia)';
+    else if (perto(-4.8, 1.5, 2.2)) h = 'E: ver o pôster';
+    else if (piscinas.some(p => perto(p.cx, POOL_Z + 11.5, 3.5))) h = 'E: voltar para a rua';
+  }
+  $('hint').textContent = h;
+}
+
+// ---------- loop ----------
+const clock = new THREE.Clock();
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+  if (locked && !carregando) mover(dt);
+  camera.position.copy(pos);
+  camera.rotation.set(pitch, yaw, 0);
+  swing = Math.max(0, swing - dt * 5);
+  pole.rotation.x = -0.12 - Math.sin(swing * Math.PI) * 0.45;
+  if (portaAberta) porta.position.x += (2 - porta.position.x) * Math.min(1, dt * 4);
+  if (job) {
+    job.t += dt; job.cd -= dt;
+    for (const l of job.folhas) {
+      const u = l.userData;
+      l.position.x = u.bx + Math.sin(t * 0.6 + u.ph) * 0.25;
+      l.position.z = u.bz + Math.cos(t * 0.5 + u.ph) * 0.2;
+      l.rotation.z += dt * 0.15;
+    }
+  }
+  toastT -= dt;
+  if (toastT <= 0) { $('toast').style.opacity = 0; if (fila.length && locked && !painel) toast(fila.shift(), 6); }
+  if (locked && !painel) {
+    S.fome = Math.max(0, S.fome - dt * 0.33); S.sede = Math.max(0, S.sede - dt * 0.5); S.ene = Math.max(0, S.ene - dt * 0.22);
+    if (S.ene <= 0) { dormir(); historia('Justin desmaiou de cansaço e acordou no dia seguinte.'); }
+  }
+  if (tim) {
+    tim.x += tim.d * dt * 1.1;
+    if (tim.x >= 1) { tim.x = 1; tim.d = -1; } else if (tim.x <= 0) { tim.x = 0; tim.d = 1; }
+    $('tcur').style.left = tim.x * 100 + '%';
+  }
+  $('money').textContent = 'R$ ' + S.money;
+  $('xp').textContent = S.xp + ' XP';
+  $('nec').textContent = 'Fome ' + Math.round(S.fome) + ' · Sede ' + Math.round(S.sede) + ' · Energia ' + Math.round(S.ene);
+  $('dv').textContent = 'Dívida R$ ' + Math.round(S.debt) + ' · Dia ' + S.day;
+  $('job').style.display = job ? 'flex' : 'none';
+  if (job) {
+    $('jl').textContent = 'Folhas: ' + job.folhas.length;
+    $('ja').textContent = 'Água verde: ' + Math.round(job.verde * 100) + '%';
+    $('jt').textContent = 'Tempo: ' + Math.floor(job.t) + 's';
+  }
+  dica();
+  renderer.render(scene, camera);
+}
+loop();
+</script>
+</body>
+</html>
